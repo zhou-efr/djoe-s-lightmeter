@@ -3,6 +3,8 @@
 //
 
 #include "views.h"
+// #include "PoppinsRegular8.h"
+// #include "PoppinsRegular10.h"
 
 void setup_fonts(){
     if (!LittleFS.begin()) {
