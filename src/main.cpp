@@ -3,8 +3,11 @@
 #include <TFT_eSPI.h>
 #include <BH1750.h>
 
+#include <BLEUtils.h>
+
 #include "views.h"
 #include "lux.h"
+#include <bluetooth.h>
 
 TFT_eSPI tft = TFT_eSPI();
 TFT_eSprite ISO_sprite = TFT_eSprite(&tft);
@@ -60,6 +63,39 @@ void HandleSerial();
 void HandleStates();
 void HandleCommands(String Cmd);
 
+class SelectCallback : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue();
+        if (value == "aperture") {
+            State.static_parameter = 1;
+        }
+        if (value == "shutter") {
+            State.static_parameter = 0;
+        }
+    }
+};
+
+class ISOCallback : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue();
+        State.ISO_index = nearestNominalIndex(std::stod(value), ISOs, ISOs_len);
+    }
+};
+
+class ShutterCallback : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue();
+        State.shutter_index = nearestNominalIndex(std::stod(value), Ts, Ts_len);
+    }
+};
+
+class ApertureCallback : public BLECharacteristicCallbacks {
+    void onWrite(BLECharacteristic *pCharacteristic) {
+        std::string value = pCharacteristic->getValue();
+        State.aperture_index = nearestNominalIndex(std::stod(value), As, As_len);
+    }
+};
+
 void setup() {
   Serial.begin(BAUD_RATE);
   Serial.println();
@@ -86,6 +122,18 @@ void setup() {
   
   Wire.begin(LM_SDA, LM_SCL);
   lightMeter.begin();
+
+  SelectCallback* SelectCallbacks = new SelectCallback();
+  ISOCallback* ISOCallbacks = new ISOCallback();
+  ShutterCallback* ShutterCallbacks = new ShutterCallback();
+  ApertureCallback* ApertureCallbacks = new ApertureCallback();
+
+  initBluetooth(
+      SelectCallbacks,
+      ISOCallbacks,
+      ShutterCallbacks,
+      ApertureCallbacks
+  );
 }
 
 void loop(){
