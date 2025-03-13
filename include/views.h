@@ -35,6 +35,7 @@ void lightmeter_load_screen(
     TFT_eSPI* tft,
     TFT_eSprite* ISO_sprite,
     String battery_level,
+    int selected, int staticparam,
     String shutter_speed, String aperture, String ISO,
     int shutter_percentage, int aperture_percentage, int ISO_percentage
 );

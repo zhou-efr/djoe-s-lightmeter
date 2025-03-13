@@ -5,11 +5,11 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
-class DjoesServerCallbacks : public BLEServerCallbacks
-{
-    void onConnect(BLEServer *pServer);
-    void onDisconnect(BLEServer *pServer);
-};
+BLEServer* pServer;
+BLECharacteristic* pSelectedCharacteristic;
+BLECharacteristic* pISOCharacteristic;
+BLECharacteristic* pShutterCharacteristic;
+BLECharacteristic* pApertureCharacteristic;
 
 void initBluetooth(
     BLECharacteristicCallbacks* SelectCallbacks,
@@ -17,9 +17,9 @@ void initBluetooth(
     BLECharacteristicCallbacks* ShutterCallbacks,
     BLECharacteristicCallbacks* ApertureCallbacks
 ) {
+    Serial.println("Initialisation du BT");
     BLEDevice::init(DEVICE_NAME);
     pServer = BLEDevice::createServer();
-    pServer->setCallbacks(new DjoesServerCallbacks());
 
     BLEService *pService = pServer->createService(SERVICE_UUID);
 
@@ -47,11 +47,14 @@ void initBluetooth(
     );
     pApertureCharacteristic->setCallbacks(ApertureCallbacks);
 
+    Serial.println("Demarrage du service");
     pService->start();
+    Serial.println("Advertising");
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);
     pAdvertising->setMinPreferred(0x12);
     BLEDevice::startAdvertising();
+    Serial.println("BT initialisation end");
 }

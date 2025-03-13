@@ -210,6 +210,7 @@ void lightmeter_load_screen(
     TFT_eSPI* tft,
     TFT_eSprite* ISO_sprite,
     String battery_level,
+    int selected, int staticparam,
     String shutter_speed, String aperture, String ISO,
     int shutter_percentage, int aperture_percentage, int ISO_percentage
 ){
@@ -217,11 +218,11 @@ void lightmeter_load_screen(
   
   lightmeter_screen_title(tft, battery_level);
 
-  lightmeter_label(tft, "Shutter - " + shutter_speed, false, true, 3, 23);
+  lightmeter_label(tft, "Shutter - " + shutter_speed, !staticparam, !selected, 3, 23);
 
   lightmeter_simple_slider(tft, shutter_percentage, true, 3, 35, 100, 8);
   
-  lightmeter_label(tft, "Aperture - " + aperture, true, false, 3, 53);
+  lightmeter_label(tft, "Aperture - " + aperture, !!staticparam, !!selected, 3, 53);
 
   lightmeter_simple_slider(tft, aperture_percentage, false, 3, 65, 100, 8);
 

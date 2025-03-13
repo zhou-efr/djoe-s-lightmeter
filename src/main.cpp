@@ -20,8 +20,8 @@ const int ISOs_len = 11;
 double ISOs[ISOs_len] = {25, 50, 80, 100, 200, 400, 500, 800, 1600, 3200, 6400};
 
 const int Ts_len = 17;
-double Ts[Ts_len] = {0.0, 2.0, 1.0, 0.5, 0.25, 0.125, 0.067, 0.033, 0.0166666667, 0.008, 0.004, 0.002, 0.001, 0.0005, 0.00025, 0.000125, 0.0000625};
-String Ts_str[Ts_len] = {"B", "2", "1", "1/2", "1/4", "1/8", "1/15", "1/30", "1/60", "1/125", "1/250", "1/500", "1/1000", "1/2000", "1/4000", "1/8000", "1/16000"};
+double Ts[Ts_len] = {0.0000625, 0.000125, 0.00025, 0.0005, 0.001, 0.002, 0.004, 0.008, 0.0166666667, 0.033, 0.067, 0.125, 0.25, 0.5, 1.0, 2.0, 100.0};
+String Ts_str[Ts_len] = {"1/16000", "1/8000", "1/4000", "1/2000", "1/1000", "1/500", "1/250", "1/125", "1/60", "1/30", "1/15", "1/8", "1/4", "1/2", "1", "2", "B"};
 
 const int As_len = 26;
 double As[As_len] = {0.5, 1.0, 1.4, 1.8, 1.9, 2, 2.8, 3.5, 4, 4.5, 5.6, 6.2, 7.3, 8, 9.5, 10, 11, 12, 14, 16, 18, 20, 22, 25, 29, 32};
@@ -59,25 +59,35 @@ String nearestNominalString(double value, double nominalValues[], String nominal
 int nearestNominalIndex(double value, double nominalValues[], int size);
 void InitStateMachine();
 // void ChangeState();
+void PrintStateMachine();
 void HandleSerial();
 void HandleStates();
 void HandleCommands(String Cmd);
 
+int bt_state = 0; // 0 - listening / 1 - receiving start / 2 - reception ended
+// reception is in the order : ISO -> shutter -> Aperture -> select
+
 class SelectCallback : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
+        String value = (pCharacteristic->getValue()).c_str();
+        // Serial.print("Select callback : ");
+        // Serial.print(value);
         if (value == "aperture") {
             State.static_parameter = 1;
         }
         if (value == "shutter") {
             State.static_parameter = 0;
         }
+        bt_state = 2;
     }
 };
 
 class ISOCallback : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
+        bt_state = 1;
         std::string value = pCharacteristic->getValue();
+        // Serial.print("ISO callback : ");
+        // Serial.println(value.c_str());
         State.ISO_index = nearestNominalIndex(std::stod(value), ISOs, ISOs_len);
     }
 };
@@ -85,22 +95,28 @@ class ISOCallback : public BLECharacteristicCallbacks {
 class ShutterCallback : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
         std::string value = pCharacteristic->getValue();
+        // Serial.print("Shutter callback : ");
+        // Serial.println(value.c_str());
+        // Serial.print("Shutter converted : ");
+        // Serial.println(std::stod(value), 10);
         State.shutter_index = nearestNominalIndex(std::stod(value), Ts, Ts_len);
     }
 };
 
 class ApertureCallback : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic *pCharacteristic) {
-        std::string value = pCharacteristic->getValue();
-        State.aperture_index = nearestNominalIndex(std::stod(value), As, As_len);
+        String value = (pCharacteristic->getValue()).c_str();
+        // Serial.print("Aperture callback : ");
+        // Serial.println(value);
+        State.aperture_index = nearestNominalIndex(value.toDouble(), As, As_len);
     }
 };
 
 void setup() {
   Serial.begin(BAUD_RATE);
-  Serial.println();
-  Serial.print(__FILE__);
-  Serial.println();
+  // Serial.println();
+  // Serial.print(__FILE__);
+  // Serial.println();
 
   InitStateMachine();
 
@@ -112,6 +128,8 @@ void setup() {
     &tft, 
     &ISO_sprite,
     "100",
+    State.selected_parameter,
+    State.static_parameter,
     Ts_str[State.shutter_index],
     As_str[State.aperture_index],
     String(ISOs[State.ISO_index]),
@@ -140,7 +158,7 @@ void loop(){
     HandleSerial();
 
     uint16_t interval = 1000;
-    if (millis() - lastUpdate >= interval)
+    if (millis() - lastUpdate >= interval && bt_state == 0)
     {
     uint16_t lux = lightMeter.readLightLevel();
     // Serial.print("Light: ");
@@ -168,6 +186,7 @@ void loop(){
                 int((State.shutter_index*100)/Ts_len)
             );
         }
+        // PrintStateMachine();
     }
 
     if (State.static_parameter == 1){
@@ -197,6 +216,27 @@ void loop(){
     // Serial.println("-----------");
     }
 
+    if (bt_state == 1){
+        // TODO : one day a "receiving" screen
+    }
+
+    if (bt_state == 2){
+        bt_state = 0;
+        lightmeter_load_screen(
+            &tft, 
+            &ISO_sprite,
+            "100",
+            State.selected_parameter,
+            State.static_parameter,
+            Ts_str[State.shutter_index],
+            As_str[State.aperture_index],
+            String(ISOs[State.ISO_index]),
+            int((State.shutter_index*100)/Ts_len),
+            int((State.aperture_index*100)/As_len),
+            int((State.ISO_index*100)/ISOs_len)
+        );
+    }
+
     HandleStates();
 }
 
@@ -205,9 +245,9 @@ void InitStateMachine() {
     State.NextState = UNKNOWN;
     State.static_parameter = 1;
     State.selected_parameter = 0;
-    State.aperture_index = 18;
-    State.shutter_index = 9;
-    State.ISO_index = 4;
+    State.aperture_index = 10;
+    State.shutter_index = 6;
+    State.ISO_index = 5;
 }
 
 void HandleSerial() {
@@ -230,6 +270,43 @@ void HandleSerial() {
 //         State.NextState = UNKNOWN;
 //     } else State.ActState = WAIT;
 // }
+
+void PrintStateMachine() {
+    Serial.println("Current State Machine Status:");
+    Serial.print("Active State: ");
+    switch (State.ActState) {
+        case UNKNOWN: Serial.println("UNKNOWN"); break;
+        case WAIT: Serial.println("WAIT"); break;
+        case UP: Serial.println("UP"); break;
+        case DOWN: Serial.println("DOWN"); break;
+        case ENTER: Serial.println("ENTER"); break;
+        case RIGHT: Serial.println("RIGHT"); break;
+        case LEFT: Serial.println("LEFT"); break;
+        case HELP: Serial.println("HELP"); break;
+        default: Serial.println("Invalid State");
+    }
+
+    Serial.println("Parameter Indices:");
+    Serial.print("Aperture Index: ");
+    Serial.println(State.aperture_index);
+    Serial.print("Shutter Speed Index: ");
+    Serial.println(State.shutter_index);
+    Serial.print("ISO Index: ");
+    Serial.println(State.ISO_index);
+
+    Serial.println("Static Parameter:");
+    Serial.println(State.static_parameter == 0 ? "Shutter" : "Aperture");
+
+    Serial.println("Selected Parameter:");
+    switch (State.selected_parameter) {
+        case 0: Serial.println("Shutter"); break;
+        case 1: Serial.println("Aperture"); break;
+        case 2: Serial.println("ISO"); break;
+        default: Serial.println("None");
+    }
+
+    Serial.println("--------- End of State Machine Status ---------");
+}
 
 void HandleStates() {
     String changed = "";
